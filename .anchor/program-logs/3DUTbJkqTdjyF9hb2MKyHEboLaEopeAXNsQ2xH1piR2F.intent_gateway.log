@@ -1,0 +1,9 @@
+Streaming transaction logs mentioning 3DUTbJkqTdjyF9hb2MKyHEboLaEopeAXNsQ2xH1piR2F. Confirmed commitment
+Transaction executed in slot 2:
+  Signature: 2zQA7BCg5HTNEPnNpooes6TWqdvJZJcBaZQDgqSzk6ufRUAuFCsH14vtFJm5gJoW6XS2iJcXCzh4GoiLfSVrJSEY
+  Status: Ok
+  Log Messages:
+    Program 3DUTbJkqTdjyF9hb2MKyHEboLaEopeAXNsQ2xH1piR2F invoke [1]
+    Program log: Instruction: Dummy
+    Program 3DUTbJkqTdjyF9hb2MKyHEboLaEopeAXNsQ2xH1piR2F consumed 705 of 200000 compute units
+    Program 3DUTbJkqTdjyF9hb2MKyHEboLaEopeAXNsQ2xH1piR2F success

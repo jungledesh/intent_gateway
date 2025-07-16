@@ -8,9 +8,7 @@ describe("intent-gateway", () => {
 
   const program = anchor.workspace.intentGateway as Program<IntentGateway>;
 
-  it("Is initialized!", async () => {
-    // Add your test here.
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
+  it("Calls the dummy instruction", async () => {
+    await program.methods.dummy().rpc();
   });
 });
