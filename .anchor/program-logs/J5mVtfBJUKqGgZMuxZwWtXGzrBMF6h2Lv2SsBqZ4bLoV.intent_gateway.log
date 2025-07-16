@@ -1,0 +1,10 @@
+Streaming transaction logs mentioning J5mVtfBJUKqGgZMuxZwWtXGzrBMF6h2Lv2SsBqZ4bLoV. Confirmed commitment
+Transaction executed in slot 3:
+  Signature: 4H2eZe1RtTibTXjZSwbgdtmNVwoHebtq8UYqAXmNsYCcmmC6jFdj2e8meT4QV4vxL2QiLpX8QqKLLGR3THcMzjYH
+  Status: Ok
+  Log Messages:
+    Program J5mVtfBJUKqGgZMuxZwWtXGzrBMF6h2Lv2SsBqZ4bLoV invoke [1]
+    Program log: Instruction: Initialize
+    Program log: Greetings from: J5mVtfBJUKqGgZMuxZwWtXGzrBMF6h2Lv2SsBqZ4bLoV
+    Program J5mVtfBJUKqGgZMuxZwWtXGzrBMF6h2Lv2SsBqZ4bLoV consumed 2963 of 200000 compute units
+    Program J5mVtfBJUKqGgZMuxZwWtXGzrBMF6h2Lv2SsBqZ4bLoV success

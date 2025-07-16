@@ -5,8 +5,8 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-intent_gateway = "5D5ja8gHCXp7hWTJKMQKd1KTMib3wA8EXuke9ZDLfXAt"
+[programs.devnet]
+intent_gateway = "J5mVtfBJUKqGgZMuxZwWtXGzrBMF6h2Lv2SsBqZ4bLoV"
 
 [registry]
 url = "https://api.apr.dev"
