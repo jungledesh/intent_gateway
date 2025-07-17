@@ -3,6 +3,9 @@
 debug
 target
 
+.anchor/*
+!.anchor/idl/
+
 test-ledger
 node_modules
 
