@@ -1,55 +1,74 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
+use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
-declare_id!("HsFzz343SCa2a3MxDzWZxoTDnbm9pW4rTLsYy9UUa1fj"); // Program ID from Anchor Build
+pub const USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"); // USDC devnet public key
 
-#[program]  // Anchor's macro for defining programs
+declare_id!("H6bdDnocJjb8RTVt2asnk21T8zcrqE76KPJA7nJie3JK"); // Program ID from Anchor Build
+
+#[program] // Anchor's macro for defining programs
 pub mod intent_gateway {
     use super::*; // Brings our program's types into scope
 
-    pub const TELLA_PUBKEY: Pubkey = pubkey!("hXLSiJmGbX7Npd2z3a699wPSBQWkZt44Q6v2F2v1uqz");  // Tella's public key
+    pub const TELLA_PUBKEY: Pubkey = pubkey!("hXLSiJmGbX7Npd2z3a699wPSBQWkZt44Q6v2F2v1uqz"); // Tella's public key
 
     // A dummy instruction to test authorization
     pub fn dummy(ctx: Context<Dummy>) -> Result<()> {
         // Check caller is Tella (secure: prevents anyone from invoking)
         if ctx.accounts.tella_signer.key() != TELLA_PUBKEY {
-            return Err(ErrorCode::Unauthorized.into());  // Custom error
+            return Err(ErrorCode::Unauthorized.into()); // Custom error
         }
-        Ok(())  // Success
+        Ok(()) // Success
     }
 
+    // Initialize User PDA + ATA
     pub fn initialize_user(ctx: Context<InitializeUser>, user_id_hash: [u8; 32]) -> Result<()> {
         if ctx.accounts.tella_signer.key() != TELLA_PUBKEY {
             return Err(ErrorCode::Unauthorized.into());
         }
-    
-        let user_account = &mut ctx.accounts.user_account;  // Get a mutable reference to the account (so we can change it)
-    
-        if user_account.user_id_hash != [0u8; 32] {  // Check if already set (all zeros means new)
-            return Err(ErrorCode::AlreadyInitialized.into());  // Error if not new
+
+        let user_account = &mut ctx.accounts.user_account; // Get a mutable reference to the account (so we can change it)
+
+        if user_account.user_id_hash != [0u8; 32] {
+            // To prevent re-init
+            return Err(ErrorCode::AlreadyInitialized.into()); // Error if not new
         }
-    
-        user_account.user_id_hash = user_id_hash;  
-        user_account.bump = ctx.bumps.user_account; 
-    
-        Ok(()) 
+
+        user_account.user_id_hash = user_id_hash;
+        user_account.bump = ctx.bumps.user_account;
+
+        // Create ATA account
+        let cpi_accounts = anchor_spl::associated_token::Create {
+            payer: ctx.accounts.tella_signer.to_account_info(), // Tella pays SOL
+            associated_token: ctx.accounts.user_token_account.to_account_info(),
+            authority: ctx.accounts.user_account.to_account_info(), // PDA owns
+            mint: ctx.accounts.token_mint.to_account_info(),        // USDC
+            system_program: ctx.accounts.system_program.to_account_info(),
+            token_program: ctx.accounts.token_program.to_account_info(),
+        };
+
+        let cpi_program = ctx.accounts.associated_token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        anchor_spl::associated_token::create(cpi_ctx)?; // Idempotent call
+
+        Ok(())
     }
 }
 
-#[account]  // This is serializable for Solana accounts (on-chain data)
+#[account] // This is serializable for Solana accounts (on-chain data)
 pub struct UserAccount {
-    pub user_id_hash: [u8; 32],  // A fixed array of 32 bytes (for the SHA-256 hash—secure and compact)
-    pub bump: u8,  // A single byte (the PDA "bump" for validation—Solana thing to make addresses unique)
+    pub user_id_hash: [u8; 32], // A fixed array of 32 bytes (for the SHA-256 hash—secure and compact)
+    pub bump: u8, // A single byte (the PDA "bump" for validation—Solana thing to make addresses unique)
 }
 
-#[derive(Accounts)]  // Macro: Defines validated accounts for instruction
+#[derive(Accounts)] // Macro: Defines validated accounts for instruction
 pub struct Dummy<'info> {
-    pub tella_signer: Signer<'info>,  // Must be a signer (has private key)
+    pub tella_signer: Signer<'info>, // Must be a signer (has private key)
 }
 
 #[derive(Accounts)]
-#[instruction(user_id_hash: [u8; 32])] 
+#[instruction(user_id_hash: [u8; 32])]
 pub struct InitializeUser<'info> {
-    #[account(mut)]  // Mutable (we create/pay for it)
+    #[account(mut)] // Mutable (we create/pay for it)
     pub tella_signer: Signer<'info>,
 
     #[account(
@@ -59,12 +78,22 @@ pub struct InitializeUser<'info> {
         seeds = [b"user", user_id_hash.as_ref()],  // PDA formula (secure seed)
         bump  // Validates bump
     )]
-    pub user_account: Account<'info, UserAccount>,  // Ties to our struct
+    pub user_account: Account<'info, UserAccount>, // Ties to our struct
 
-    pub system_program: Program<'info, System>,  // Solana's built-in for creating accounts
+    /// CHECK: Validated by CPI (creates ATA if not exists)
+    #[account(mut)]
+    pub user_token_account: UncheckedAccount<'info>,
+
+    /// CHECK: Locked to USDC_MINT via address constraint
+    #[account(address = USDC_MINT)]
+    pub token_mint: UncheckedAccount<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>, // Solana's built-in program for creating accounts
 }
 
-#[error_code]  // Macro: Defines program errors
+#[error_code] // Macro: Defines program errors
 pub enum ErrorCode {
     #[msg("Unauthorized caller")]
     Unauthorized,
