@@ -6,13 +6,13 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-intent_gateway = "HsFzz343SCa2a3MxDzWZxoTDnbm9pW4rTLsYy9UUa1fj"
+intent_gateway = "H6bdDnocJjb8RTVt2asnk21T8zcrqE76KPJA7nJie3JK"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
