@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-intent_gateway = "9rM13srbxpfZAzoUVSgj7sKW65fHSjmoNbSi5YGMiv3q"
+intent_gateway = "HsFzz343SCa2a3MxDzWZxoTDnbm9pW4rTLsYy9UUa1fj"
 
 [registry]
 url = "https://api.apr.dev"
