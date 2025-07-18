@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
-use anchor_spl::{associated_token::AssociatedToken, token::Token};
+use anchor_spl::{associated_token::AssociatedToken, token::{Token, Transfer}};
 
 pub const USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"); // USDC devnet public key
 
-declare_id!("H6bdDnocJjb8RTVt2asnk21T8zcrqE76KPJA7nJie3JK"); // Program ID from Anchor Build
+declare_id!("Gwuc4KQwRVcSakeGHxkVimJ9xN684MxxjSmihZ2u3YSf"); // Program ID from Anchor Build
 
 #[program] // Anchor's macro for defining programs
 pub mod intent_gateway {
@@ -52,6 +52,34 @@ pub mod intent_gateway {
 
         Ok(())
     }
+
+    // Transfer USDC b/w PDA's 
+    pub fn p2p_transfer(ctx: Context<P2PTransfer>, from_user_id_hash: [u8; 32], to_user_id_hash: [u8; 32], amount: u64) -> Result<()> {
+        // Only Tella can call 
+        if ctx.accounts.tella_signer.key() != TELLA_PUBKEY {
+          return Err(ErrorCode::Unauthorized.into());
+        }
+
+        // Validate hashes match PDAs
+        if ctx.accounts.from_user_account.user_id_hash != from_user_id_hash {
+          return Err(ErrorCode::InvalidAccountData.into());
+        }
+        if ctx.accounts.to_user_account.user_id_hash != to_user_id_hash {
+          return Err(ErrorCode::InvalidAccountData.into());
+        }
+      
+        // CPI for SPL token transfer
+        let cpi_accounts = anchor_spl::token::Transfer {
+          from: ctx.accounts.from_token_account.to_account_info(),
+          to: ctx.accounts.to_token_account.to_account_info(),
+          authority: ctx.accounts.from_user_account.to_account_info(), // from_user PDA signs transfer
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        anchor_spl::token::transfer(cpi_ctx, amount)?;
+      
+        Ok(())
+      }
 }
 
 #[account] // This is serializable for Solana accounts (on-chain data)
@@ -93,10 +121,42 @@ pub struct InitializeUser<'info> {
     pub system_program: Program<'info, System>, // Solana's built-in program for creating accounts
 }
 
+// Accounts for P2P transfers, validates PDAs and token accounts 
+#[derive(Accounts)]
+#[instruction(from_user_id_hash: [u8; 32], to_user_id_hash: [u8; 32])]
+pub struct P2PTransfer<'info> {
+  #[account(mut)] // Mutable (we create/pay for it)
+  pub tella_signer: Signer<'info>,
+
+  #[account(
+    seeds = [b"user", &from_user_id_hash[..]],
+    bump = from_user_account.bump
+  )]
+  pub from_user_account: Account<'info, UserAccount>,
+
+  /// CHECK: Validated by CPI transfer (ATA for from_user)
+  #[account(mut)] // Mutable for debit
+  pub from_token_account: UncheckedAccount<'info>, // ATA for from_user
+
+  #[account(
+    seeds = [b"user", &to_user_id_hash[..]],
+    bump = to_user_account.bump
+  )]
+  pub to_user_account: Account<'info, UserAccount>,
+
+  /// CHECK: Validated by CPI transfer (ATA for from_user)
+  #[account(mut)] // Mutable for credit 
+  pub to_token_account: UncheckedAccount<'info>, // ATA for to_user
+
+  pub token_program: Program<'info, Token>, // SPL token program
+}
+
 #[error_code] // Macro: Defines program errors
 pub enum ErrorCode {
     #[msg("Unauthorized caller")]
     Unauthorized,
     #[msg("Account already initialized")]
     AlreadyInitialized,
+    #[msg("Invalid account data")]
+    InvalidAccountData,
 }
