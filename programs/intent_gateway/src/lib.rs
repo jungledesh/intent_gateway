@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
-use anchor_spl::{associated_token::AssociatedToken, token::{Token, Transfer}};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{Token, Transfer},
+};
 
 // Not needed for localnet
 //pub const USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"); // USDC devnet public key
@@ -54,42 +57,47 @@ pub mod intent_gateway {
         Ok(())
     }
 
-    // Transfer USDC b/w PDA's 
-    pub fn p2p_transfer(ctx: Context<P2PTransfer>, from_user_id_hash: [u8; 32], to_user_id_hash: [u8; 32], amount: u64) -> Result<()> {
-        // Only Tella can call 
+    // Transfer USDC b/w PDA's
+    pub fn p2p_transfer(
+        ctx: Context<P2PTransfer>,
+        from_user_id_hash: [u8; 32],
+        to_user_id_hash: [u8; 32],
+        amount: u64,
+    ) -> Result<()> {
+        // Only Tella can call
         if ctx.accounts.tella_signer.key() != TELLA_PUBKEY {
-          return Err(ErrorCode::Unauthorized.into());
+            return Err(ErrorCode::Unauthorized.into());
         }
 
         // Validate hashes match PDAs
         if ctx.accounts.from_user_account.user_id_hash != from_user_id_hash {
-          return Err(ErrorCode::InvalidAccountData.into());
+            return Err(ErrorCode::InvalidAccountData.into());
         }
         if ctx.accounts.to_user_account.user_id_hash != to_user_id_hash {
-          return Err(ErrorCode::InvalidAccountData.into());
+            return Err(ErrorCode::InvalidAccountData.into());
         }
-      
+
         // CPI for SPL token transfer
         let cpi_accounts = anchor_spl::token::Transfer {
-          from: ctx.accounts.from_token_account.to_account_info(),
-          to: ctx.accounts.to_token_account.to_account_info(),
-          authority: ctx.accounts.from_user_account.to_account_info(), // from_user PDA signs transfer
+            from: ctx.accounts.from_token_account.to_account_info(),
+            to: ctx.accounts.to_token_account.to_account_info(),
+            authority: ctx.accounts.from_user_account.to_account_info(), // from_user PDA signs transfer
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
 
         // Seeds for PDA signer (matches PDA derivation)
         let seeds = &[
-    b"user".as_ref(),
-    &from_user_id_hash.as_ref(),
-    &[ctx.accounts.from_user_account.bump]
-  ];
-  let signer_seeds = &[&seeds[..]];
+            b"user".as_ref(),
+            &from_user_id_hash.as_ref(),
+            &[ctx.accounts.from_user_account.bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
 
-  let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
         anchor_spl::token::transfer(cpi_ctx, amount)?;
-      
+
         Ok(())
-      }
+    }
 }
 
 #[account] // This is serializable for Solana accounts (on-chain data)
@@ -123,7 +131,7 @@ pub struct InitializeUser<'info> {
     pub user_token_account: UncheckedAccount<'info>,
 
     /// CHECK: Locked to USDC_MINT via address constraint
-  //  #[account(address = USDC_MINT)] -- removing for localnet
+    //  #[account(address = USDC_MINT)] -- removing for localnet
     pub token_mint: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -131,35 +139,35 @@ pub struct InitializeUser<'info> {
     pub system_program: Program<'info, System>, // Solana's built-in program for creating accounts
 }
 
-// Accounts for P2P transfers, validates PDAs and token accounts 
+// Accounts for P2P transfers, validates PDAs and token accounts
 #[derive(Accounts)]
 #[instruction(from_user_id_hash: [u8; 32], to_user_id_hash: [u8; 32])]
 pub struct P2PTransfer<'info> {
-  #[account(mut)] // Mutable (we create/pay for it)
-  pub tella_signer: Signer<'info>,
+    #[account(mut)] // Mutable (we create/pay for it)
+    pub tella_signer: Signer<'info>,
 
-  #[account(
+    #[account(
     seeds = [b"user", &from_user_id_hash.as_ref()],
     bump = from_user_account.bump
   )]
-  /// The PDA authority of from_token_account
-  pub from_user_account: Account<'info, UserAccount>,
+    /// The PDA authority of from_token_account
+    pub from_user_account: Account<'info, UserAccount>,
 
-  /// CHECK: Validated by CPI transfer (ATA for from_user)
-  #[account(mut)] // Mutable for debit
-  pub from_token_account: UncheckedAccount<'info>, // ATA for from_user
+    /// CHECK: Validated by CPI transfer (ATA for from_user)
+    #[account(mut)] // Mutable for debit
+    pub from_token_account: UncheckedAccount<'info>, // ATA for from_user
 
-  #[account(
+    #[account(
     seeds = [b"user", &to_user_id_hash.as_ref()],
     bump = to_user_account.bump
   )]
-  pub to_user_account: Account<'info, UserAccount>,
+    pub to_user_account: Account<'info, UserAccount>,
 
-  /// CHECK: Validated by CPI transfer (ATA for from_user)
-  #[account(mut)] // Mutable for credit 
-  pub to_token_account: UncheckedAccount<'info>, // ATA for to_user
+    /// CHECK: Validated by CPI transfer (ATA for from_user)
+    #[account(mut)] // Mutable for credit
+    pub to_token_account: UncheckedAccount<'info>, // ATA for to_user
 
-  pub token_program: Program<'info, Token>, // SPL token program
+    pub token_program: Program<'info, Token>, // SPL token program
 }
 
 #[error_code] // Macro: Defines program errors
