@@ -4,10 +4,13 @@ import { IntentGateway } from "../target/types/intent_gateway";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  createMint,
+  mintTo,
+  getAssociatedTokenAddress,
 } from "@solana/spl-token";
 import * as crypto from "crypto";
-
 import { expect } from "chai";
+import BN from "bn.js";
 
 // Test suite
 describe("intent_gateway", () => {
@@ -17,8 +20,21 @@ describe("intent_gateway", () => {
   // Get program instance from IDL
   const program = anchor.workspace.IntentGateway as Program<IntentGateway>;
 
-  // Get Tella pubkey
-  const tellaKey = program.provider.publicKey;
+  let mint: anchor.web3.PublicKey; // Declare here for scope
+
+  before(async () => {
+    const mintAuthority = program.provider.publicKey;
+    mint = await createMint(
+      program.provider.connection,
+      program.provider.wallet.payer, // Payer
+      mintAuthority, // Mint authority
+      null, // Freeze authority
+      6, // Decimals
+      undefined, // Mint keypair (random)
+      undefined, // Confirm opts
+      TOKEN_PROGRAM_ID
+    );
+  });
 
   // Test dummy instruction - should succeed
   it("Calls dummy successfully", async () => {
@@ -40,16 +56,18 @@ describe("intent_gateway", () => {
       program.programId
     );
 
-    // USDC mint for devnet
-    const usdcMint = new anchor.web3.PublicKey(
-      "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
-    );
+    // // USDC mint for devnet
+    // const usdcMint = new anchor.web3.PublicKey(
+    //   "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    // );
 
-    // Compute ATA address
-    const userTokenAccount = anchor.web3.PublicKey.findProgramAddressSync(
-      [userPda.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), usdcMint.toBuffer()],
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID
-    )[0];
+    );
 
     // Call initialize_user - pass hash, specify accounts, send tx
     await program.methods
@@ -58,7 +76,7 @@ describe("intent_gateway", () => {
         tellaSigner: program.provider.publicKey, // payer
         userAccount: userPda,
         userTokenAccount,
-        tokenMint: usdcMint, // TypeScript doesn't recognize it due to stale types
+        tokenMint: mint, // TypeScript doesn't recognize it due to stale types
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -91,7 +109,6 @@ describe("intent_gateway", () => {
 
     // Get raw 32-byte SHA-256 hash using Node's crypto
     const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
-    const userIdHashHex = userIdHashBytes.toString("hex");
 
     // Compute PDA/bump - mirrors Rust seeds
     const [userPda, bump] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -99,16 +116,18 @@ describe("intent_gateway", () => {
       program.programId
     );
 
-    // USDC mint for devnet
-    const usdcMint = new anchor.web3.PublicKey(
-      "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
-    );
+    // // USDC mint for devnet
+    // const usdcMint = new anchor.web3.PublicKey(
+    //   "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    // );
 
-    // Compute ATA address
-    const userTokenAccount = anchor.web3.PublicKey.findProgramAddressSync(
-      [userPda.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), usdcMint.toBuffer()],
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID
-    )[0];
+    );
 
     // Try call again - expect fail
     try {
@@ -118,7 +137,7 @@ describe("intent_gateway", () => {
           tellaSigner: program.provider.publicKey, // payer
           userAccount: userPda,
           userTokenAccount,
-          tokenMint: usdcMint, // TypeScript doesn't recognize it due to stale types
+          tokenMint: mint, // TypeScript doesn't recognize it due to stale types
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
@@ -129,4 +148,110 @@ describe("intent_gateway", () => {
       expect(err.error.errorMessage).to.equal("Account already initialized"); // Matches Rust msg
     }
   });
+
+  // Test P2P transfer - verifies USDC move between PDAs
+it("Transfers USDC between users", async () => {
+  // Fake users
+  const user1Id = "+1234567890"; // From
+  const user1HashBytes = crypto.createHash("sha256").update(user1Id).digest();
+
+  const user2Id = "+0987654321"; // To
+  const user2HashBytes = crypto.createHash("sha256").update(user2Id).digest();
+
+  const [user1Pda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("user"), user1HashBytes],
+    program.programId
+  );
+  const [user2Pda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("user"), user2HashBytes],
+    program.programId
+  );
+
+  const user1TokenAccount = await getAssociatedTokenAddress(
+    mint,
+    user1Pda,
+    true,
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+  const user2TokenAccount = await getAssociatedTokenAddress(
+    mint,
+    user2Pda,
+    true,
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+// Check if users initialized, init if not (idempotent)
+const user1Acc = await program.provider.connection.getAccountInfo(user1Pda);
+if (!user1Acc) {
+  await program.methods
+    .initializeUser(Array.from(user1HashBytes))
+    .accounts({
+      tellaSigner: program.provider.publicKey,
+      userAccount: user1Pda,
+      userTokenAccount: user1TokenAccount,
+      tokenMint: mint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    })
+    .rpc({ commitment: "confirmed" });
+}
+
+const user2Acc = await program.provider.connection.getAccountInfo(user2Pda);
+  if (!user2Acc) {
+    await program.methods
+      .initializeUser(Array.from(user2HashBytes))
+      .accounts({
+        tellaSigner: program.provider.publicKey,
+        userAccount: user2Pda,
+        userTokenAccount: user2TokenAccount,
+        tokenMint: mint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc({ commitment: "confirmed" });
+  }
+
+// Mint tokens to user1 ATA (1 token)
+await mintTo(
+  program.provider.connection,
+  program.provider.wallet.payer,
+  mint,
+  user1TokenAccount,
+  program.provider.publicKey, // Mint authority
+  1000000, // Amount (1 with decimals=6)
+  [],
+  { commitment: "confirmed" },
+  TOKEN_PROGRAM_ID,
+);
+
+const fromTokenAccountInfo = await program.provider.connection.getParsedAccountInfo(user1TokenAccount);
+console.log("From Token Account Owner:", fromTokenAccountInfo.value?.data.parsed.info.owner);
+console.log("Expected Owner:", user1Pda.toBase58());
+
+  // Call p2p_transfer - 0.5 USDC (500000 units)
+  await program.methods
+  .p2PTransfer(Array.from(user1HashBytes), Array.from(user2HashBytes), new BN(1000000))
+    .accounts({
+      tellaSigner: program.provider.publicKey,
+      fromUserAccount: user1Pda,
+      fromTokenAccount: user1TokenAccount,
+      toUserAccount: user2Pda,
+      toTokenAccount: user2TokenAccount,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .rpc({ commitment: "confirmed" });
+
+// Check balances post transfer
+const user1Balance = await program.provider.connection.getTokenAccountBalance(user1TokenAccount);
+const user2Balance = await program.provider.connection.getTokenAccountBalance(user2TokenAccount);
+
+// Assert balances changed exactly
+expect(user1Balance.value.uiAmount).to.equal(0.0);
+expect(user2Balance.value.uiAmount).to.equal(0.5);
+});
 });

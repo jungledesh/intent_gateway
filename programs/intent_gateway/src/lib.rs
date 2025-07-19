@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
 use anchor_spl::{associated_token::AssociatedToken, token::{Token, Transfer}};
 
-pub const USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"); // USDC devnet public key
+// Not needed for localnet
+//pub const USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"); // USDC devnet public key
 
-declare_id!("Gwuc4KQwRVcSakeGHxkVimJ9xN684MxxjSmihZ2u3YSf"); // Program ID from Anchor Build
+declare_id!("6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"); // Program ID from Anchor Build
 
 #[program] // Anchor's macro for defining programs
 pub mod intent_gateway {
@@ -75,7 +76,16 @@ pub mod intent_gateway {
           authority: ctx.accounts.from_user_account.to_account_info(), // from_user PDA signs transfer
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+
+        // Seeds for PDA signer (matches PDA derivation)
+        let seeds = &[
+    b"user".as_ref(),
+    &from_user_id_hash.as_ref(),
+    &[ctx.accounts.from_user_account.bump]
+  ];
+  let signer_seeds = &[&seeds[..]];
+
+  let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
         anchor_spl::token::transfer(cpi_ctx, amount)?;
       
         Ok(())
@@ -113,7 +123,7 @@ pub struct InitializeUser<'info> {
     pub user_token_account: UncheckedAccount<'info>,
 
     /// CHECK: Locked to USDC_MINT via address constraint
-    #[account(address = USDC_MINT)]
+  //  #[account(address = USDC_MINT)] -- removing for localnet
     pub token_mint: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -129,9 +139,10 @@ pub struct P2PTransfer<'info> {
   pub tella_signer: Signer<'info>,
 
   #[account(
-    seeds = [b"user", &from_user_id_hash[..]],
+    seeds = [b"user", &from_user_id_hash.as_ref()],
     bump = from_user_account.bump
   )]
+  /// The PDA authority of from_token_account
   pub from_user_account: Account<'info, UserAccount>,
 
   /// CHECK: Validated by CPI transfer (ATA for from_user)
@@ -139,7 +150,7 @@ pub struct P2PTransfer<'info> {
   pub from_token_account: UncheckedAccount<'info>, // ATA for from_user
 
   #[account(
-    seeds = [b"user", &to_user_id_hash[..]],
+    seeds = [b"user", &to_user_id_hash.as_ref()],
     bump = to_user_account.bump
   )]
   pub to_user_account: Account<'info, UserAccount>,

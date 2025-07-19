@@ -3,6 +3,8 @@
 debug
 target
 
+keys
+
 .anchor/*
 !.anchor/idl/
 
