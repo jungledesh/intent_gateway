@@ -1,11 +1,5 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{Token, Transfer},
-};
-
-// Not needed for localnet
-//pub const USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"); // USDC devnet public key
+use anchor_spl::{associated_token::AssociatedToken, token::{Token, Transfer}};
 
 declare_id!("6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"); // Program ID from Anchor Build
 
@@ -32,13 +26,15 @@ pub mod intent_gateway {
 
         let user_account = &mut ctx.accounts.user_account; // Get a mutable reference to the account (so we can change it)
 
-        if user_account.user_id_hash != [0u8; 32] {
-            // To prevent re-init
-            return Err(ErrorCode::AlreadyInitialized.into()); // Error if not new
-        }
+// 
+if user_account.is_initialized {
+    // To prevent re-init
+    return Err(ErrorCode::AlreadyInitialized.into());
+}
 
         user_account.user_id_hash = user_id_hash;
         user_account.bump = ctx.bumps.user_account;
+        user_account.is_initialized = true; // Set flag to avoid re-init attacks
 
         // Create ATA account
         let cpi_accounts = anchor_spl::associated_token::Create {
@@ -104,6 +100,7 @@ pub mod intent_gateway {
 pub struct UserAccount {
     pub user_id_hash: [u8; 32], // A fixed array of 32 bytes (for the SHA-256 hash—secure and compact)
     pub bump: u8, // A single byte (the PDA "bump" for validation—Solana thing to make addresses unique)
+    pub is_initialized: bool,     // Explicit init flag
 }
 
 #[derive(Accounts)] // Macro: Defines validated accounts for instruction
@@ -120,7 +117,7 @@ pub struct InitializeUser<'info> {
     #[account(
         init_if_needed,  // Create if not exists (safe)
         payer = tella_signer,  // Tella pays SOL for creation
-        space = 8 + 32 + 1,  // Size: 8 (discriminator) + 32 (hash) + 1 (bump)
+        space = 8 + 32 + 1 + 1,  // Size: 8 (discriminator) + 32 (hash) + 1 (bump) + is_init flag
         seeds = [b"user", user_id_hash.as_ref()],  // PDA formula (secure seed)
         bump  // Validates bump
     )]
