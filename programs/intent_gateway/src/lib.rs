@@ -1,6 +1,9 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
-use anchor_spl::{associated_token::AssociatedToken, token::{Token, Transfer}};
 use anchor_spl::associated_token::get_associated_token_address;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{Token, Transfer},
+};
 
 declare_id!("6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"); // Program ID from Anchor Build
 
@@ -27,25 +30,24 @@ pub mod intent_gateway {
 
         let user_account = &mut ctx.accounts.user_account; // Get a mutable reference to the account (so we can change it)
 
-// 
-if user_account.is_initialized {
-    // To prevent re-init
-    return Err(ErrorCode::AlreadyInitialized.into());
-}
+        //
+        if user_account.is_initialized {
+            // To prevent re-init
+            return Err(ErrorCode::AlreadyInitialized.into());
+        }
 
         user_account.user_id_hash = user_id_hash;
         user_account.bump = ctx.bumps.user_account;
         user_account.is_initialized = true; // Set flag to avoid re-init attacks
 
-
-    // Manual validation: Check if user_token_account is the correct ATA
-    let expected_ata = get_associated_token_address(
-        &ctx.accounts.user_account.key(),
-        &ctx.accounts.token_mint.key(),
-    );
-    if ctx.accounts.user_token_account.key() != expected_ata {
-        return Err(ErrorCode::InvalidTokenAccount.into());
-    }
+        // Manual validation: Check if user_token_account is the correct ATA
+        let expected_ata = get_associated_token_address(
+            &ctx.accounts.user_account.key(),
+            &ctx.accounts.token_mint.key(),
+        );
+        if ctx.accounts.user_token_account.key() != expected_ata {
+            return Err(ErrorCode::InvalidTokenAccount.into());
+        }
 
         // Create ATA account
         let cpi_accounts = anchor_spl::associated_token::Create {
@@ -111,7 +113,7 @@ if user_account.is_initialized {
 pub struct UserAccount {
     pub user_id_hash: [u8; 32], // A fixed array of 32 bytes (for the SHA-256 hash—secure and compact)
     pub bump: u8, // A single byte (the PDA "bump" for validation—Solana thing to make addresses unique)
-    pub is_initialized: bool,     // Explicit init flag
+    pub is_initialized: bool, // Explicit init flag
 }
 
 #[derive(Accounts)] // Macro: Defines validated accounts for instruction
