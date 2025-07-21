@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
 use anchor_spl::{associated_token::AssociatedToken, token::{Token, Transfer}};
+use anchor_spl::associated_token::get_associated_token_address;
 
 declare_id!("6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"); // Program ID from Anchor Build
 
@@ -35,6 +36,16 @@ if user_account.is_initialized {
         user_account.user_id_hash = user_id_hash;
         user_account.bump = ctx.bumps.user_account;
         user_account.is_initialized = true; // Set flag to avoid re-init attacks
+
+
+    // Manual validation: Check if user_token_account is the correct ATA
+    let expected_ata = get_associated_token_address(
+        &ctx.accounts.user_account.key(),
+        &ctx.accounts.token_mint.key(),
+    );
+    if ctx.accounts.user_token_account.key() != expected_ata {
+        return Err(ErrorCode::InvalidTokenAccount.into());
+    }
 
         // Create ATA account
         let cpi_accounts = anchor_spl::associated_token::Create {
@@ -123,8 +134,8 @@ pub struct InitializeUser<'info> {
     )]
     pub user_account: Account<'info, UserAccount>, // Ties to our struct
 
-    /// CHECK: Validated by CPI (creates ATA if not exists)
-    #[account(mut)]
+    /// CHECK: Validated by CPI transfer (ATA for from_user)
+    #[account(mut)] // Mutable for creation + Credit & Debit balance for transfers
     pub user_token_account: UncheckedAccount<'info>,
 
     /// CHECK: Locked to USDC_MINT via address constraint
@@ -175,4 +186,6 @@ pub enum ErrorCode {
     AlreadyInitialized,
     #[msg("Invalid account data")]
     InvalidAccountData,
+    #[msg("Invalid token account (must be ATA)")]
+    InvalidTokenAccount,
 }
