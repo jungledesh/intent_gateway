@@ -1,9 +1,6 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
 use anchor_spl::associated_token::get_associated_token_address;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::Token,
-};
+use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
 declare_id!("6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"); // Program ID from Anchor Build
 
