@@ -201,7 +201,7 @@ pub enum ErrorCode {
     #[msg("Invalid token account (must be ATA)")]
     InvalidTokenAccount,
     #[msg("Invalid transfer amount (must be > 0)")]
-    InvalidAmount, 
+    InvalidAmount,
     #[msg("Self-transfer not allowed")]
-    SelfTransferNotAllowed, 
+    SelfTransferNotAllowed,
 }
