@@ -86,6 +86,16 @@ pub mod intent_gateway {
             return Err(ErrorCode::InvalidAccountData.into());
         }
 
+        // Amount should be > 0
+        if amount == 0 {
+            return Err(ErrorCode::InvalidAmount.into());
+        }
+
+        // Static transfer check, no self tranfer allowed
+        if from_user_id_hash == to_user_id_hash {
+            return Err(ErrorCode::SelfTransferNotAllowed.into());
+        }
+
         // CPI for SPL token transfer
         let cpi_accounts = anchor_spl::token::Transfer {
             from: ctx.accounts.from_token_account.to_account_info(),
@@ -190,4 +200,8 @@ pub enum ErrorCode {
     InvalidAccountData,
     #[msg("Invalid token account (must be ATA)")]
     InvalidTokenAccount,
+    #[msg("Invalid transfer amount (must be > 0)")]
+    InvalidAmount, 
+    #[msg("Self-transfer not allowed")]
+    SelfTransferNotAllowed, 
 }

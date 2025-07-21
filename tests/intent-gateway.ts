@@ -37,6 +37,18 @@ describe("intent_gateway", () => {
     );
   });
 
+  const userId = "+1234567890";
+
+  // Get raw 32-byte SHA-256 hash using Node's crypto
+  const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
+  const userIdHashHex = userIdHashBytes.toString("hex");
+
+  // Compute PDA/bump - mirrors Rust seeds
+  const [userPda, bump] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("user"), userIdHashBytes],
+    program.programId,
+  );
+
   // Test dummy instruction - should succeed
   it("Calls dummy successfully", async () => {
     await program.methods.dummy().rpc();
@@ -44,19 +56,6 @@ describe("intent_gateway", () => {
 
   // Test PDA init - verifies creation and data
   it("Initializes a user PDA and ATA", async () => {
-    // Fake user ID - test input
-    const userId = "+1234567890";
-
-    // Get raw 32-byte SHA-256 hash using Node's crypto
-    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
-    const userIdHashHex = userIdHashBytes.toString("hex");
-
-    // Compute PDA/bump - mirrors Rust seeds
-    const [userPda, bump] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("user"), userIdHashBytes],
-      program.programId,
-    );
-
     const userTokenAccount = await getAssociatedTokenAddress(
       mint,
       userPda,
@@ -319,18 +318,6 @@ describe("intent_gateway", () => {
 
   // Test re-initialization fail - checks guard
   it("Fails re-initialization", async () => {
-    // Fake user ID - same as init test
-    const userId = "+1234567890";
-
-    // Get raw 32-byte SHA-256 hash using Node's crypto
-    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
-
-    // Compute PDA/bump - mirrors Rust seeds
-    const [userPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("user"), userIdHashBytes],
-      program.programId,
-    );
-
     const userTokenAccount = await getAssociatedTokenAddress(
       mint,
       userPda,
@@ -602,9 +589,6 @@ describe("intent_gateway", () => {
       TOKEN_PROGRAM_ID,
     );
 
-    const fromTokenAccountInfo =
-      await program.provider.connection.getParsedAccountInfo(user1TokenAccount);
-
     // Call p2p_transfer - 0.5 USDC (500000 units)
     await program.methods
       .p2PTransfer(
@@ -635,5 +619,67 @@ describe("intent_gateway", () => {
     // Assert balances changed exactly
     expect(user1Balance.value.uiAmount).to.equal(0.0);
     expect(user2Balance.value.uiAmount).to.equal(1.0);
+  });
+
+  it("Fails p2p transfer with unauthorized signer", async () => {
+    const unauthorizedSigner = anchor.web3.Keypair.generate();
+    await program.provider.connection.requestAirdrop(
+      unauthorizedSigner.publicKey,
+      anchor.web3.LAMPORTS_PER_SOL,
+    );
+    await program.provider.connection.confirmTransaction(
+      await program.provider.connection.getLatestBlockhash(),
+    );
+
+    try {
+      await program.methods
+        .p2PTransfer(
+          Array.from(user1HashBytes),
+          Array.from(user2HashBytes),
+          new BN(500000),
+        )
+        .accounts({
+          tellaSigner: unauthorizedSigner.publicKey,
+          fromUserAccount: user1Pda,
+          fromTokenAccount: user1TokenAccount,
+          toUserAccount: user2Pda,
+          toTokenAccount: user2TokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([unauthorizedSigner])
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      console.log(err);
+      expect(err.error.errorCode.code).to.equal("Unauthorized");
+    }
+  });
+
+  it("Fails p2p transfer with invalid hashes", async () => {
+    const invalidHash = crypto.createHash("sha256").update("+invalid").digest();
+
+    const user2Id = "+0987654321"; // To
+    const user2HashBytes = crypto.createHash("sha256").update(user2Id).digest();
+
+    try {
+      await program.methods
+        .p2PTransfer(
+          Array.from(invalidHash),
+          Array.from(user2HashBytes),
+          new BN(500000),
+        )
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          fromUserAccount: user1Pda,
+          fromTokenAccount: user1TokenAccount,
+          toUserAccount: user2Pda,
+          toTokenAccount: user2TokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.error.errorCode.code).to.equal("InvalidAccountData");
+    }
   });
 });
