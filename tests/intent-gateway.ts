@@ -98,42 +98,82 @@ describe("intent_gateway", () => {
   });
 
   // Unauthorized signer (bad actor)
-it("Fails initialization with unauthorized signer", async () => {
-  const userId = "+unauthorized";
-  const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
+  it("Fails initialization with unauthorized signer", async () => {
+    const userId = "+unauthorized";
+    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
 
-  const [userPda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("user"), userIdHashBytes],
-    program.programId
-  );
+    const [userPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), userIdHashBytes],
+      program.programId,
+    );
 
-  const userTokenAccount = await getAssociatedTokenAddress(
-    mint,
-    userPda,
-    true,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  );
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
 
-  const unauthorizedSigner = anchor.web3.Keypair.generate();
+    const unauthorizedSigner = anchor.web3.Keypair.generate();
 
-  // Airdrop SOL to the unauthorized signer to cover tx fees and rent
-  const airdropSignature = await program.provider.connection.requestAirdrop(
-    unauthorizedSigner.publicKey,
-    anchor.web3.LAMPORTS_PER_SOL  // 1 SOL should be sufficient
-  );
+    // Airdrop SOL to the unauthorized signer to cover tx fees and rent
+    const airdropSignature = await program.provider.connection.requestAirdrop(
+      unauthorizedSigner.publicKey,
+      anchor.web3.LAMPORTS_PER_SOL, // 1 SOL should be sufficient
+    );
 
-  await program.provider.connection.confirmTransaction({
-    signature: airdropSignature,
-    blockhash: (await program.provider.connection.getLatestBlockhash()).blockhash,
-    lastValidBlockHeight: (await program.provider.connection.getLatestBlockhash()).lastValidBlockHeight,
+    await program.provider.connection.confirmTransaction({
+      signature: airdropSignature,
+      blockhash: (await program.provider.connection.getLatestBlockhash())
+        .blockhash,
+      lastValidBlockHeight: (
+        await program.provider.connection.getLatestBlockhash()
+      ).lastValidBlockHeight,
+    });
+
+    try {
+      await program.methods
+        .initializeUser(Array.from(userIdHashBytes))
+        .accounts({
+          tellaSigner: unauthorizedSigner.publicKey,
+          userAccount: userPda,
+          userTokenAccount,
+          tokenMint: mint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([unauthorizedSigner]) // Sign with unauthorized keypair
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.error.errorCode.code).to.equal("Unauthorized");
+    }
   });
 
-  try {
+  // Special case: Init with zero user_id_hash
+  it("Initializes with zero user_id_hash", async () => {
+    const zeroHash = new Uint8Array(32).fill(0);
+    const zeroHex = zeroHash.toString("hex");
+
+    const [userPda, bump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), zeroHash],
+      program.programId,
+    );
+
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
     await program.methods
-      .initializeUser(Array.from(userIdHashBytes))
+      .initializeUser(Array.from(zeroHash))
       .accounts({
-        tellaSigner: unauthorizedSigner.publicKey,
+        tellaSigner: program.provider.publicKey,
         userAccount: userPda,
         userTokenAccount,
         tokenMint: mint,
@@ -141,98 +181,93 @@ it("Fails initialization with unauthorized signer", async () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([unauthorizedSigner])  // Sign with unauthorized keypair
       .rpc();
-    expect.fail("Should have failed");
-  } catch (err) {
-    expect(err.error.errorCode.code).to.equal("Unauthorized"); 
-  }
-});
 
- // Special case: Init with zero user_id_hash
-it("Initializes with zero user_id_hash", async () => {
-  const zeroHash = new Uint8Array(32).fill(0);
-  const zeroHex = zeroHash.toString("hex");
+    // Fetch account data - check on-chain state
+    const userAccount = await program.account.userAccount.fetch(userPda);
 
-  const [userPda, bump] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("user"), zeroHash],
-    program.programId
-  );
+    // Assert hash matches - .toString("hex") compares arrays
+    expect(userAccount.userIdHash).to.deep.equal(Array.from(zeroHash));
 
-  const userTokenAccount = await getAssociatedTokenAddress(
-    mint,
-    userPda,
-    true,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  );
+    // Assert bump matches - verifies PDA
+    expect(userAccount.bump).to.equal(bump);
+    expect(userAccount.isInitialized).to.be.true;
 
-    await program.methods
-    .initializeUser(Array.from(zeroHash))
-    .accounts({
-      tellaSigner: program.provider.publicKey,
-      userAccount: userPda,
-      userTokenAccount,
-      tokenMint: mint,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      systemProgram: anchor.web3.SystemProgram.programId,
-    })
-    .rpc();
+    // Check ATA exists and is valid
+    const tokenAccount =
+      await program.provider.connection.getAccountInfo(userTokenAccount);
+    expect(tokenAccount).to.not.be.null; // ATA created
+    expect(tokenAccount.owner.toBase58()).to.equal(TOKEN_PROGRAM_ID.toBase58()); // Owned by Token Program
+  });
 
-        // Fetch account data - check on-chain state
-        const userAccount = await program.account.userAccount.fetch(userPda);
+  it("Fails initialization with wrong user_token_account", async () => {
+    const userId = "+wrongata";
+    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
 
-        // Assert hash matches - .toString("hex") compares arrays
-        expect(userAccount.userIdHash).to.deep.equal(Array.from(zeroHash));
-    
-        // Assert bump matches - verifies PDA
-        expect(userAccount.bump).to.equal(bump);
-        expect(userAccount.isInitialized).to.be.true;
-    
-        // Check ATA exists and is valid
-        const tokenAccount =
-          await program.provider.connection.getAccountInfo(userTokenAccount);
-        expect(tokenAccount).to.not.be.null; // ATA created
-        expect(tokenAccount.owner.toBase58()).to.equal(TOKEN_PROGRAM_ID.toBase58()); // Owned by Token Program
-});
+    const [userPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), userIdHashBytes],
+      program.programId,
+    );
 
-// Edge: Re-init with zero hash
-it("Re-initialization with zero user_id_hash", async () => {
-  const zeroHash = new Uint8Array(32).fill(0);
+    const wrongUserTokenAccount = anchor.web3.Keypair.generate().publicKey;
 
-  const [userPda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("user"), zeroHash],
-    program.programId
-  );
+    try {
+      await program.methods
+        .initializeUser(Array.from(userIdHashBytes))
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          userAccount: userPda,
+          userTokenAccount: wrongUserTokenAccount,
+          tokenMint: mint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.error.errorMessage).to.equal(
+        "Invalid token account (must be ATA)",
+      );
+    }
+  });
 
-  const userTokenAccount = await getAssociatedTokenAddress(
-    mint,
-    userPda,
-    true,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  );
+  // Edge: Re-init with zero hash
+  it("Re-initialization with zero user_id_hash", async () => {
+    const zeroHash = new Uint8Array(32).fill(0);
 
-   try {
-    await program.methods
-    .initializeUser(Array.from(zeroHash))
-    .accounts({
-      tellaSigner: program.provider.publicKey,
-      userAccount: userPda,
-      userTokenAccount,
-      tokenMint: mint,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      systemProgram: anchor.web3.SystemProgram.programId,
-    })
-    .rpc();
+    const [userPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), zeroHash],
+      program.programId,
+    );
 
-    expect.fail("Should have failed");
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    try {
+      await program.methods
+        .initializeUser(Array.from(zeroHash))
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          userAccount: userPda,
+          userTokenAccount,
+          tokenMint: mint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+
+      expect.fail("Should have failed");
     } catch (err) {
       expect(err.error.errorMessage).to.equal("Account already initialized"); // Matches Rust msg
     }
-});
+  });
 
   // Test re-initialization fail - checks guard
   it("Fails re-initialization", async () => {
