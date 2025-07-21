@@ -7,6 +7,7 @@ import {
   createMint,
   mintTo,
   getAssociatedTokenAddress,
+  getAccount,
 } from "@solana/spl-token";
 import * as crypto from "crypto";
 import { expect } from "chai";
@@ -232,6 +233,53 @@ describe("intent_gateway", () => {
     }
   });
 
+  // Verifying ATA details post-init
+  it("Verifies ATA details after initialization", async () => {
+    const userId = "+atadetails";
+    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
+
+    const [userPda, bump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), userIdHashBytes],
+      program.programId,
+    );
+
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    await program.methods
+      .initializeUser(Array.from(userIdHashBytes))
+      .accounts({
+        tellaSigner: program.provider.publicKey,
+        userAccount: userPda,
+        userTokenAccount,
+        tokenMint: mint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    // Fetch and verify UserAccount
+    const userAccount = await program.account.userAccount.fetch(userPda);
+    expect(userAccount.userIdHash).to.deep.equal(Array.from(userIdHashBytes));
+    expect(userAccount.isInitialized).to.be.true;
+    expect(userAccount.bump).to.equal(bump);
+
+    // Fetch and verify ATA details
+    const ataInfo = await getAccount(
+      program.provider.connection,
+      userTokenAccount,
+    );
+    expect(ataInfo.mint.toBase58()).to.equal(mint.toBase58()); // Matches mint
+    expect(ataInfo.owner.toBase58()).to.equal(userPda.toBase58()); // Owned by PDA
+    expect(ataInfo.amount).to.equal(0n); // Initial balance is 0
+  });
+
   // Edge: Re-init with zero hash
   it("Re-initialization with zero user_id_hash", async () => {
     const zeroHash = new Uint8Array(32).fill(0);
@@ -308,6 +356,169 @@ describe("intent_gateway", () => {
       expect.fail("Should have failed");
     } catch (err) {
       expect(err.error.errorMessage).to.equal("Account already initialized"); // Matches Rust msg
+    }
+  });
+
+  // Idempotent ATA creation
+  it("Idempotently initializes when ATA already exists", async () => {
+    const userId = "+idempotent";
+    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
+
+    const [userPda, bump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), userIdHashBytes],
+      program.programId,
+    );
+
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    // First call: Initialize user and create ATA
+    await program.methods
+      .initializeUser(Array.from(userIdHashBytes))
+      .accounts({
+        tellaSigner: program.provider.publicKey,
+        userAccount: userPda,
+        userTokenAccount,
+        tokenMint: mint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    // Verify ATA after first call
+    const ataInfoFirst = await getAccount(
+      program.provider.connection,
+      userTokenAccount,
+    );
+    expect(ataInfoFirst.mint.toBase58()).to.equal(mint.toBase58());
+    expect(ataInfoFirst.owner.toBase58()).to.equal(userPda.toBase58());
+    expect(ataInfoFirst.amount).to.equal(0n);
+
+    // Second call: Should fail due to re-init, but ATA remains unchanged
+    try {
+      await program.methods
+        .initializeUser(Array.from(userIdHashBytes))
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          userAccount: userPda,
+          userTokenAccount,
+          tokenMint: mint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.error.errorCode.code).to.equal("AlreadyInitialized");
+    }
+
+    // Verify ATA unchanged after second call
+    const ataInfoSecond = await getAccount(
+      program.provider.connection,
+      userTokenAccount,
+    );
+    expect(ataInfoSecond.mint.toBase58()).to.equal(mint.toBase58());
+    expect(ataInfoSecond.owner.toBase58()).to.equal(userPda.toBase58());
+    expect(ataInfoSecond.amount).to.equal(0n);
+  });
+
+  it("Fails initialization with invalid token_mint", async () => {
+    const userId = "+invalidmint";
+    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
+
+    const [userPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), userIdHashBytes],
+      program.programId,
+    );
+
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    const invalidMint = anchor.web3.Keypair.generate().publicKey; // Random key, not a mint
+
+    try {
+      await program.methods
+        .initializeUser(Array.from(userIdHashBytes))
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          userAccount: userPda,
+          userTokenAccount,
+          tokenMint: invalidMint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.error.errorCode.code).to.equal("InvalidTokenAccount");
+    }
+  });
+
+  it("Fails initialization when payer has insufficient SOL", async () => {
+    const userId = "+lowsol";
+    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
+
+    const [userPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), userIdHashBytes],
+      program.programId,
+    );
+
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    // Create a low-balance signer
+    const lowBalanceSigner = anchor.web3.Keypair.generate();
+    const minLamports = 100000; // Minimal SOL for tx fees, too low for rent
+
+    // Airdrop minimal SOL
+    const airdropSignature = await program.provider.connection.requestAirdrop(
+      lowBalanceSigner.publicKey,
+      minLamports,
+    );
+    await program.provider.connection.confirmTransaction({
+      signature: airdropSignature,
+      blockhash: (await program.provider.connection.getLatestBlockhash())
+        .blockhash,
+      lastValidBlockHeight: (
+        await program.provider.connection.getLatestBlockhash()
+      ).lastValidBlockHeight,
+    });
+
+    try {
+      await program.methods
+        .initializeUser(Array.from(userIdHashBytes))
+        .accounts({
+          tellaSigner: lowBalanceSigner.publicKey,
+          userAccount: userPda,
+          userTokenAccount,
+          tokenMint: mint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([lowBalanceSigner])
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.toString().toLowerCase()).to.include("insufficient lamports");
     }
   });
 
