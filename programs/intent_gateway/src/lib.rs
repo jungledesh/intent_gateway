@@ -1,12 +1,10 @@
 use anchor_lang::prelude::*; // Anchor's core types and macros
 use anchor_spl::associated_token::get_associated_token_address;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{Token, Transfer},
-};
+use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
 declare_id!("6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"); // Program ID from Anchor Build
 
+#[allow(deprecated)]
 #[program] // Anchor's macro for defining programs
 pub mod intent_gateway {
     use super::*; // Brings our program's types into scope
@@ -107,7 +105,7 @@ pub mod intent_gateway {
         // Seeds for PDA signer (matches PDA derivation)
         let seeds = &[
             b"user".as_ref(),
-            &from_user_id_hash.as_ref(),
+            from_user_id_hash.as_ref(),
             &[ctx.accounts.from_user_account.bump],
         ];
         let signer_seeds = &[&seeds[..]];
