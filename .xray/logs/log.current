@@ -1,0 +1,39 @@
+00:13:16 [info] [xray] [cli.go:219:cli.Start] Start a new session. version=v0.0.6, args=[/workspace]
+00:13:16 [info] [xray] [cli.go:236:cli.Start] Create the build directory. dir=/workspace/.xray/build
+00:13:16 [info] [xray] [cli.go:275:cli.Start] Passed cmdline args via env. cmdlineOpts={"Opts":["-logger.logFolder=/workspace/.xray/logs","-cwd=/workspace"]}
+00:13:16 [info] [xray] [cli.go:279:cli.Start] Execute sol-code-parser to generate IR files. cmdline=[/workspace]
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/node_modules/buffer-layout/jsdoc/custom
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/node_modules/js-yaml/bin
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/node_modules/js-yaml/dist
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/node_modules/js-yaml/lib
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/node_modules/json-stringify-safe/test
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/node_modules/json5/dist
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/node_modules/json5/lib
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/target/debug
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/target/deploy
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/target/idl
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/target/release
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/target/sbpf-solana-solana
+00:13:16 [info] [xray] [cli.go:120:cli.findAllXargoTomlDirectory.func1] skip path: /workspace/target/types
+00:13:16 [debug] [xray] [Logger.cpp:153] Set logging configs: level=debug, logFolder=/workspace/.xray/logs, logFile=log.current, enableTerminal=false, enableFile=true
+00:13:16 [info] [xray] [cli.go:353:cli.Start] Analyzing IR file "/workspace/programs/intent_gateway/programs_intent_gateway.ll" for issues...
+00:13:16 [info] [xray] [cli.go:358:cli.Start] Generating the JSON file. jsonPath=/workspace/.xray/tmp/coderrect-1753143196/xray_programs_intent_gateway.ll_report.json
+00:13:16 [debug] [xray] [Logger.cpp:153] Set logging configs: level=debug, logFolder=/workspace/.xray/logs, logFile=log.current, enableTerminal=false, enableFile=true
+00:13:16 [info] [xray] [Main.cpp:219] Loading IR From File: /workspace/programs/intent_gateway/programs_intent_gateway.ll
+00:13:16 [info] [xray] [Main.cpp:227] Running Transformation Passes
+00:13:16 [info] [xray] [AccountIDL.cpp:105] Anchor IDL result: 
+00:13:16 [info] [xray] [SolverBase.h:458] Pointer Analysis Starting to Solve
+00:13:16 [debug] [xray] [PartialUpdateSolver.h:355] PTA Iteration No: 0 - nodes: 431
+00:13:16 [info] [xray] [SolverBase.h:463] Pointer Analysis Finished Solving
+00:13:16 [debug] [xray] [SolverBase.h:467] PTA constraint graph node number 431, callgraph node number 13
+00:13:16 [info] [xray] [SolanaAnalysisPass.cpp:3416] Start Analyzing
+00:13:17 [info] [xray] [SolanaAnalysisPass.cpp:3420] Start Building SHB
+00:13:17 [debug] [xray] [SolanaAnalysisPass.cpp:3427] Start travering thread 0, thread start = cr_main
+00:13:17 [debug] [xray] [SolanaAnalysisPass.cpp:3427] Start travering thread 1, thread start = sol.dummy.1
+00:13:17 [debug] [xray] [SolanaAnalysisPass.cpp:3427] Start travering thread 2, thread start = sol.initialize_user.2
+00:13:17 [debug] [xray] [SolanaAnalysisPass.cpp:3489] Finish Building SHB. time=0.0016965s
+00:13:17 [debug] [xray] [SolanaAnalysisPass.cpp:3490] Number of threads: 3
+00:13:17 [debug] [xray] [SolanaAnalysisPass.cpp:3497] Finished Analysis. time=4.1e-08s
+00:13:17 [info] [reporter] [reporter.go:106:reporter.GenerateReport] Check the cmdlineenv. cmdlineEnv={"Opts":["-logger.logFolder=/workspace/.xray/logs","-cwd=/workspace"]}
+00:13:17 [info] [reporter] [reporter.go:139:reporter.GenerateReport] Reporter exits gracefully
+00:13:17 [info] [reporter] [cli.go:439:cli.Start] End the session
