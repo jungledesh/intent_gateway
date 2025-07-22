@@ -28,7 +28,6 @@ pub mod intent_gateway {
 
         let user_account = &mut ctx.accounts.user_account; // Get a mutable reference to the account (so we can change it)
 
-        //
         if user_account.is_initialized {
             // To prevent re-init
             return Err(ErrorCode::AlreadyInitialized.into());
