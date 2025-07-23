@@ -3,6 +3,7 @@ use anchor_spl::associated_token::get_associated_token_address;
 use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
 declare_id!("6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"); // Program ID from Anchor Build
+pub const USDC_MINT: Pubkey = pubkey!("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr");
 
 #[allow(deprecated)]
 #[program] // Anchor's macro for defining programs
@@ -93,6 +94,23 @@ pub mod intent_gateway {
             return Err(ErrorCode::SelfTransferNotAllowed.into());
         }
 
+        // Manual validation: Check token accounts are ATAs
+        let expected_from_ata = get_associated_token_address(
+            &ctx.accounts.from_user_account.key(),
+            &ctx.accounts.token_mint.key(),
+        );
+        if ctx.accounts.from_token_account.key() != expected_from_ata {
+            return Err(ErrorCode::InvalidTokenAccount.into());
+        }
+
+        let expected_to_ata = get_associated_token_address(
+            &ctx.accounts.to_user_account.key(),
+            &ctx.accounts.token_mint.key(),
+        );
+        if ctx.accounts.to_token_account.key() != expected_to_ata {
+            return Err(ErrorCode::InvalidTokenAccount.into());
+        }
+
         // CPI for SPL token transfer
         let cpi_accounts = anchor_spl::token::Transfer {
             from: ctx.accounts.from_token_account.to_account_info(),
@@ -148,7 +166,7 @@ pub struct InitializeUser<'info> {
     pub user_token_account: UncheckedAccount<'info>,
 
     /// CHECK: Locked to USDC_MINT via address constraint
-    //  #[account(address = USDC_MINT)] -- removing for localnet
+    #[account(address = USDC_MINT)]
     pub token_mint: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -183,6 +201,10 @@ pub struct P2PTransfer<'info> {
     /// CHECK: Validated by CPI transfer (ATA for from_user)
     #[account(mut)] // Mutable for credit
     pub to_token_account: UncheckedAccount<'info>, // ATA for to_user
+
+    /// CHECK: Locked to USDC_MINT via address constraint
+    #[account(address = USDC_MINT)] // For devnet
+    pub token_mint: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>, // SPL token program
 }
