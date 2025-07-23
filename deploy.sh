@@ -25,4 +25,4 @@ echo "🚀 Deploying to $1..."
 anchor deploy --provider.cluster $1
 
 echo "Running tests ..."
-anchor test
+anchor test --provider.cluster $1
