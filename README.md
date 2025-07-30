@@ -34,3 +34,4 @@ B txt Tella - Done
 Tella txt B - Confirm you are sending $10 to A
 B txt Tella - Yes
 Tella txt B - Sent
+```
