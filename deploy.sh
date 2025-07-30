@@ -16,13 +16,13 @@ cp keys/intent_gateway-keypair.json target/deploy/intent_gateway-keypair.json
 rm -f target/idl/intent_gateway.json
 
 echo "🔨 Building..."
-anchor build
+RUSTFLAGS="-C link-arg=-v" anchor build
 
 # Check: does this file now contain p2pTransfer?
 cat target/idl/intent_gateway.json | jq '.instructions[].name'
 
 echo "🚀 Deploying to $1..."
-anchor deploy --provider.cluster $1
+RUSTFLAGS="-C link-arg=-v" anchor deploy --provider.cluster $1
 
 echo "Running tests ..."
-anchor test --provider.cluster $1
+RUSTFLAGS="-C link-arg=-v" anchor test --provider.cluster $1
