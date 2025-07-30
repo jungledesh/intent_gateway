@@ -35,6 +35,3 @@ Tella txt B - Confirm you are sending $10 to A
 B txt Tella - Yes
 Tella txt B - Sent
 ```
-
-To buid, deploy, & test program use: 
-`RUSTFLAGS="-C link-arg=-v" anchor build`
