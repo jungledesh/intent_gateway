@@ -35,3 +35,5 @@ Tella txt B - Confirm you are sending $10 to A
 B txt Tella - Yes
 Tella txt B - Sent
 ```
+
+Note: Tella right now uses Singh's local solana key pair as the only authZ'd pair to call & sign tx
