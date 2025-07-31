@@ -6,7 +6,7 @@ solana_version = "2.1.0"
 [features]
 resolution = true
 skip-lint = false
-idl-build = ["anchor-spl/idl-build", "anchor-lang/idl-build"]
+idl-build = ["anchor-lang/idl-build"]
 
 [programs.devnet]
 intent_gateway = "6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"
