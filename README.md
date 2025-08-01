@@ -39,17 +39,21 @@ Tella txt B - Sent
 
 1. Create an ATA
 
-``` spl-token create-account Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr \ 
+``` 
+spl-token create-account Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr \ 
   --owner hXLSiJmGbX7Npd2z3a699wPSBQWkZt44Q6v2F2v1uqz \
   --fee-payer ~/.config/solana/id.json \
   --url https://api.devnet.solana.com
 ```
 
 2. Check balance
-```spl-token balance --address <ATA-Address>```
+```
+spl-token balance --address <ATA-Address>
+```
 
 3. Transfer USDC
-```spl-token transfer Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr 5 \                         
+```
+spl-token transfer Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr 5 \                         
   <recipient-ATA-Address> \
   --fund-recipient \
   --url https://api.devnet.solana.com 
