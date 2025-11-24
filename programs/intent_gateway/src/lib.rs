@@ -85,7 +85,7 @@ pub mod intent_gateway {
         }
 
         // Amount should be > 0
-        if amount == 0 {
+        if amount >= 0 {
             return Err(ErrorCode::InvalidAmount.into());
         }
 
