@@ -289,9 +289,9 @@ spl-token create-account Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr \
   --url https://api.devnet.solana.com
 ```
 
-2. Check balance
+2. Check ATA balance and other info
 ```
-spl-token balance --address <ata-address>
+spl-token account-info --address <ata-address> --url https://api.devnet.solana.com
 ```
 
 3. Transfer Tokens (USDC)
@@ -303,13 +303,22 @@ spl-token transfer Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr 5 \
 ```
 This transfers local wallet's ATA USDC to recipient's ATA
 
-4. Fund local wallet with USDC 
+4. Fund local wallet with USDC
+
++ [Devnet Faucet](https://spl-token-faucet.com/?token-name=USDC-Dev)
++ Connect Wallet
++ Ensure devnet selected (both wallet + faucet UI)
++ Paste your wallet public key
++ Faucet will airdrop directly into your USDC ATA (if exists)
+
+5. View deployed program ID
+
 ```
-Visit Faucet: https://spl-token-faucet.com/?token-name=USDC-Dev
+solana address -k keys/intent_gateway-keypair.json
 ```
 
-Connect Wallet, and selct Devnet both in Wallet and Faucet Page
+6. View IDL definition
 
-Copy and Paste Wallet's Address (i.e. Public key) to fund USDC. 
-Tokens go automatically to the ATA linked to account
-
+```
+cat target/idl/intent_gateway.json | jq
+```
