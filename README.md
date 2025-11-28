@@ -337,8 +337,10 @@ cat target/idl/intent_gateway.json | jq
 
 [Tella](https://github.com/jungledesh/tella): The off-chain service layer for intent parsing and SMS integration.
 
-For questions, open an issue. Built for a future where intents drive on-chain actions seamlessly!
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Note
+
+For questions, open an issue. Built for a future where intents drive on-chain actions seamlessly!
