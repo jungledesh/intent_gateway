@@ -1,11 +1,18 @@
-# intent-gateway
+# Intent-Gateway
 
-Solana-based `program` to facilitate **intent-driven transactions**.
+[![GitHub license](https://img.shields.io/github/license/jungledesh/intent_gateway)](https://github.com/jungledesh/intent_gateway/blob/main/LICENSE)
+[![Solana](https://img.shields.io/badge/Solana-blueviolet)](https://solana.com/)
+[![Rust](https://img.shields.io/badge/Rust-1.89-orange)](https://www.rust-lang.org/)
+[![Anchor](https://img.shields.io/badge/Anchor-0.31-blue)](https://www.anchor-lang.com/)
 
-This version implements **txt2pay** — P2P payments via text messages.
+Intent Gateway is a Solana program built with Anchor that serves as the on-chain component for intent-driven transactions.
 
-### No Apps. No Wallet. No Friction
-**Text/type → see your money moving.**
+It abstracts user wallet management by automatically initializing Program Derived Addresses (PDAs) and Associated Token Accounts (ATAs), and facilitates secure peer-to-peer (P2P) USDC transfers.
+
+This program is designed to enable seamless, intent-based interactions (e.g., via SMS in the companion [Tella](https://github.com/jungledesh/tella) service layer), removing the need for users to manage wallets or keys directly.
+
+## No Apps. No Wallet. No Friction
+**text/type → see your money moving.**
 
 From the history of computing machines, PCs became mainstream when Apple **successfully shed its nerdy image** for everyday users.  
 This broke the entry barrier and flattened the learning curve.
@@ -22,22 +29,20 @@ Complex, nerdy wallet setups make **general, everyday, non-crypto users** nervou
 
 With **intent-gateway**, money movement is as simple as sending a text message — `in natural SMS lingo`.
 
+## Overview
 
-### Core Concepts
+The core idea is to provide a secure, custodial on-chain gateway for intents parsed from off-chain sources (like natural language SMS). Users are identified via hashed IDs (e.g., SHA-256 of phone numbers), and the program ensures only authorized callers (e.g., the backend service) can invoke instructions. This setup supports applications like "txt2pay" - P2P payments triggered by text messages while maintaining Solana's speed and low costs.
+
+## Core Concepts
 - **No crypto UX friction** — users interact using SMS, no wallet apps required
 - **Custodial onboarding** — wallets created automatically if needed
 - **Identity abstraction** — user identifiers are SHA-256 phone hashes
 - **Security** — PDA-based authority, ATA validation, CPI transfer
 - **Immutable ledger** — funds move on Solana via USDC program
 
-### Program Design
+## Workflow
 
-The `intent_gateway` Solana program powers intent-driven payments executed purely through SMS.  
-User accounts are represented as PDAs derived from hashed phone numbers, and funds move through validated ATAs owned by these PDAs. Transfers are performed using SPL token CPI calls.
-
-### Workflow
-
-#### High-Level Human Flow (SMS Experience)
+### High-Level Human Flow (SMS Experience)
 ```
 A → B: Hey, I’m low on money. Can you spot me 10 bucks?
 B → A: Sure.
@@ -48,7 +53,7 @@ B enters PIN over call
 Tella → B: Sent $10 to <A's mobile number>
 ```
 
-#### Wallet handling (automated)
+### Wallet handling (automated)
 ```
 If wallet exists for B (sender)
     Proceed with transfer
@@ -65,7 +70,7 @@ If wallet does NOT exist for A
     Tella → A: B sent you $10 — connect wallet with your bank (Plaid link)
 ```
 
-#### Technical Flow (System-Level Sequence)
+### Technical Flow (System-Level Sequence)
 ```mermaid
 sequenceDiagram
     participant U as User (B - SMS)
@@ -94,7 +99,7 @@ sequenceDiagram
     T-->>TAU: "B sent you $10"
 ```
 
-### Security
+## Security
 
 - **PDA signer seeds** — Program Derived Addresses ensure transfer authority cannot be owned or forged by any external user or key. Only the program itself can authorize actions via `invoke_signed`, preventing unauthorized invocation or spoofed signers.  
 - **ATA validation** — Verifies that token accounts are derived from the correct owner and mint before performing transfers.  
@@ -102,7 +107,7 @@ sequenceDiagram
 - **[Tella-only](https://github.com/jungledesh/tella) invocation** — Enforces that only the backend service (Tella) can call program instructions.  
 - **Encrypted hashed phone numbers** — User phone numbers are never stored in plaintext. An HMAC key stored in a secure AWS enclave generates irreversible hashes, protecting user privacy even in breach scenarios.
 
-### Accounts & PDAs
+## Accounts & PDAs
 
 The program uses Program Derived Addresses (PDAs) to represent users on-chain.
 Each user’s wallet authority is derived from a SHA-256 HMAC hash of their phone number:
@@ -114,7 +119,7 @@ user_pda = Pubkey::find_program_address(
 )
 ```
 
-#### Account Model
+### Account Model
 
 | Account                      | Description                        | Created When                         | Notes                               |
 | ---------------------------- | ---------------------------------- | ------------------------------------ | ----------------------------------- |
@@ -125,7 +130,7 @@ user_pda = Pubkey::find_program_address(
 | **Associated Token Program** | Creates ATAs                       | —                                    | Convenience program                 |
 | **USDC Mint**                | Mint address of token              | Static                               | Used for balance validation         |
 
-#### PDA Guarantees
+### PDA Guarantees
 
 + No end-user private keys involved → removes UX friction
 
@@ -133,33 +138,32 @@ user_pda = Pubkey::find_program_address(
 
 + Prevents spoofing forged wallets or redirecting transfers
 
-### Instruction Reference
+## Instruction Reference
 
 `initialize_user`
 
 ```
-initialize_user(ctx, phone_hash)
+initialize_user(ctx, user_id_hash)
 ```
 | Arg          | Type       | Purpose                  |
 | ------------ | ---------- | ------------------------ |
-| `phone_hash` | `[u8; 32]` | HMAC-hashed phone number |
+| `user_id_hash` | `[u8; 32]` | HMAC-hashed phone number |
 
 Creates PDA + ATA if not already present.
 
 `p2p_transfer`
 
 ```
-p2p_transfer(ctx, from_hash, to_hash, amount, memo)
+p2p_transfer(ctx, from_user_id_hash, to_user_id_hash, amount)
 ```
 
 | Arg                 | Type       | Purpose              |
 | ------------------- | ---------- | -------------------- |
-| `from_hash`         | `[u8; 32]` | Sender phone hash    |
-| `to_hash`           | `[u8; 32]` | Recipient phone hash |
+| `from_user_id_hash`         | `[u8; 32]` | Sender phone hash    |
+| `to_user_id_hash`           | `[u8; 32]` | Recipient phone hash |
 | `amount`            | `u64`      | Amount in USDC       |
-| `memo` *(optional)* | `String`   | Purpose or message   |
 
-#### Validations
+### Validations
 
 + Sender & recipient PDAs derived and verified
 
@@ -171,31 +175,23 @@ p2p_transfer(ctx, from_hash, to_hash, amount, memo)
 
 + Reject transfer amount less than 0
 
-+ CPI transfer executed via:
-```
-token::transfer(...)
-```
++ CPI executed transfer
 
-#### Emits
-```
-Event::Transfer { from, to, amount, memo }
-```
+## Installation
 
-### Installation
-
-#### Prerequisites
+### Prerequisites
 
 Ensure the following are installed:
 
 | Tool                   | Version                    |
 | ---------------------- | -------------------------- |
-| **Rust**               | `1.78+`                    |
+| **Rust**               | `1.80+`                    |
 | **Solana CLI**         | `1.18+`                    |
 | **Anchor**             | `0.30+`                    |
 | **Node + Yarn / pnpm** | *(optional for scripting)* |
 | **jq**                 | for JSON inspection        |
 
-#### Install Solana & Anchor
+### Install Solana & Anchor
 
 ```
 sh -c "$(curl -sSfL https://release.solana.com/v2.1.3/install)"
@@ -204,7 +200,7 @@ avm install latest
 avm use latest
 ```
 
-#### Verfiy Setup
+### Verfiy Setup
 
 ```
 solana --version
@@ -212,22 +208,29 @@ anchor --version
 rustc --version
 ```
 
-#### Clone the Repository
+### Clone the Repository
 
 ```
 git clone https://github.com/jungledesh/intent-gateway.git
 cd intent-gateway
 ```
 
-### Deployment 
+### Install dependencies:
 
-#### Generate program keypair (first time only)
+```
+cargo build
+anchor build
+```
+
+## Deployment 
+
+### Generate program keypair (first time only)
 
 ```
 solana-keygen new -o keys/intent_gateway-keypair.json
 ```
 
-#### Deploy script 
+### Build and Deploy script 
 
 ```
 #!/bin/bash
@@ -276,9 +279,8 @@ Example:
 chmod +x scripts/deploy.sh
 ./deploy.sh devnet
 ```
-To deploy program to Solana devnet 
 
-#### Useful Commands
+## Useful Commands
 
 1. Create an ATA (Associated Token Account for USDC)
 
@@ -303,22 +305,40 @@ spl-token transfer Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr 5 \
 ```
 This transfers local wallet's ATA USDC to recipient's ATA
 
-4. Fund local wallet with USDC
-
-+ [Devnet Faucet](https://spl-token-faucet.com/?token-name=USDC-Dev)
-+ Connect Wallet
-+ Ensure devnet selected (both wallet + faucet UI)
-+ Paste your wallet public key
-+ Faucet will airdrop directly into your USDC ATA (if exists)
-
-5. View deployed program ID
+4. View deployed program ID
 
 ```
 solana address -k keys/intent_gateway-keypair.json
 ```
 
-6. View IDL definition
+5. View IDL definition
 
 ```
 cat target/idl/intent_gateway.json | jq
 ```
+
+## Fund local wallet with USDC (Devnet)
+
++ Open [Devnet Faucet](https://spl-token-faucet.com/?token-name=USDC-Dev)
++ Connect Wallet
++ Ensure devnet selected (both wallet + faucet UI)
++ Paste your wallet public key
++ Faucet will airdrop directly into your USDC ATA (creates if it does not exist)
+
+## Testing
+
++ Unit tests in `tests/intent-gateway.ts` cover initialization, trasnfers, and error cases. 
+
++ Run with `anchor test --provider.cluster devnet` for devnet testing
+
++ Coverage: Aim for 90%+; use cargo tarpaulin for reports.
+
+## Related Projects
+
+[Tella](https://github.com/jungledesh/tella): The off-chain service layer for intent parsing and SMS integration.
+
+For questions, open an issue. Built for a future where intents drive on-chain actions seamlessly!
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
