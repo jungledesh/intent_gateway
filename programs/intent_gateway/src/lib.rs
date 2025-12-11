@@ -20,7 +20,7 @@ use anchor_lang::prelude::*; // Anchor's core types and macros
 use anchor_spl::associated_token::get_associated_token_address;
 use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
-declare_id!("6mRsosPgBPjRgAxpvX4qZnJjchWSJmbqJYYJLM4sKRXz"); // Program ID from Anchor Build
+declare_id!("4dPJxe2R42G3GMdvpxz6JC3mxpzHzqFj9f8u3YTXaY55"); // Program ID from Anchor Build
 pub const USDC_MINT: Pubkey = pubkey!("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr"); // SPL Token named USDC (devnet)
 
 #[allow(deprecated)]
