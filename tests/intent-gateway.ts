@@ -803,4 +803,372 @@ describe("intent_gateway", () => {
       expect(err.toString()).to.include("insufficient funds");
     }
   });
+
+  // Validates maximum transfer amount (u64::MAX)
+  it("Handles maximum u64 transfer amount", async () => {
+    const maxU64 = new BN("18446744073709551615");
+
+    try {
+      await program.methods
+        .p2PTransfer(
+          Array.from(user1HashBytes),
+          Array.from(user2HashBytes),
+          maxU64,
+        )
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          fromUserAccount: user1Pda,
+          fromTokenAccount: user1TokenAccount,
+          toUserAccount: user2Pda,
+          toTokenAccount: user2TokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.toString().toLowerCase()).to.include("insufficient");
+    }
+  });
+
+  // Verifies wrong token account rejects transfer
+  it("Fails p2p transfer with mismatched token accounts", async () => {
+    const wrongTokenAccount = anchor.web3.Keypair.generate().publicKey;
+
+    try {
+      await program.methods
+        .p2PTransfer(
+          Array.from(user1HashBytes),
+          Array.from(user2HashBytes),
+          new BN(100000),
+        )
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          fromUserAccount: user1Pda,
+          fromTokenAccount: wrongTokenAccount,
+          toUserAccount: user2Pda,
+          toTokenAccount: user2TokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err).to.exist;
+    }
+  });
+
+  // Verifies PDA seeds must match accounts
+  it("Fails p2p transfer with wrong PDA for hash", async () => {
+    const user3Id = "+9999999999_" + Date.now();
+    const user3HashBytes = crypto.createHash("sha256").update(user3Id).digest();
+
+    try {
+      await program.methods
+        .p2PTransfer(
+          Array.from(user3HashBytes),
+          Array.from(user2HashBytes),
+          new BN(100000),
+        )
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          fromUserAccount: user1Pda,
+          fromTokenAccount: user1TokenAccount,
+          toUserAccount: user2Pda,
+          toTokenAccount: user2TokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.error.errorCode.code).to.equal("ConstraintSeeds");
+    }
+  });
+
+  // Tests initialization with max length hash
+  it("Initializes with valid 32-byte hash", async () => {
+    const maxHash = new Uint8Array(32).fill(255);
+
+    const [userPda, bump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), maxHash],
+      program.programId,
+    );
+
+    const userTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      userPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    const userAcc = await program.provider.connection.getAccountInfo(userPda);
+    if (userAcc) {
+      console.log("Max hash PDA already initialized; skipping");
+      return;
+    }
+
+    await program.methods
+      .initializeUser(Array.from(maxHash))
+      .accounts({
+        tellaSigner: program.provider.publicKey,
+        userAccount: userPda,
+        userTokenAccount,
+        tokenMint: mint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const userAccount = await program.account.userAccount.fetch(userPda);
+    expect(userAccount.userIdHash).to.deep.equal(Array.from(maxHash));
+    expect(userAccount.bump).to.equal(bump);
+    expect(userAccount.isInitialized).to.be.true;
+  });
+
+  // Tests transfer of exact balance (all funds)
+  it("Transfers exact balance leaving zero", async () => {
+    const userId = "+exactbalance" + Date.now();
+    const userIdHashBytes = crypto.createHash("sha256").update(userId).digest();
+
+    const [senderPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), userIdHashBytes],
+      program.programId,
+    );
+
+    const senderTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      senderPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    await program.methods
+      .initializeUser(Array.from(userIdHashBytes))
+      .accounts({
+        tellaSigner: program.provider.publicKey,
+        userAccount: senderPda,
+        userTokenAccount: senderTokenAccount,
+        tokenMint: mint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc({ commitment: "confirmed" });
+
+    const providerAta = await getAssociatedTokenAddress(
+      mint,
+      program.provider.publicKey,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    await transfer(
+      program.provider.connection,
+      program.provider.wallet.payer,
+      providerAta,
+      senderTokenAccount,
+      program.provider.publicKey,
+      5000000,
+      [],
+      { commitment: "confirmed" },
+      TOKEN_PROGRAM_ID,
+    );
+
+    const balanceBefore =
+      await program.provider.connection.getTokenAccountBalance(
+        senderTokenAccount,
+      );
+    const exactAmount = new BN(balanceBefore.value.amount);
+
+    await program.methods
+      .p2PTransfer(
+        Array.from(userIdHashBytes),
+        Array.from(user2HashBytes),
+        exactAmount,
+      )
+      .accounts({
+        tellaSigner: program.provider.publicKey,
+        fromUserAccount: senderPda,
+        fromTokenAccount: senderTokenAccount,
+        toUserAccount: user2Pda,
+        toTokenAccount: user2TokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc({ commitment: "confirmed" });
+
+    const balanceAfter =
+      await program.provider.connection.getTokenAccountBalance(
+        senderTokenAccount,
+      );
+    expect(balanceAfter.value.uiAmount).to.equal(0);
+  });
+
+  // Tests minimum viable transfer (1 unit)
+  it("Transfers minimum amount (1 unit)", async () => {
+    const user1Before =
+      await program.provider.connection.getTokenAccountBalance(
+        user1TokenAccount,
+      );
+    const user2Before =
+      await program.provider.connection.getTokenAccountBalance(
+        user2TokenAccount,
+      );
+
+    await program.methods
+      .p2PTransfer(
+        Array.from(user1HashBytes),
+        Array.from(user2HashBytes),
+        new BN(1),
+      )
+      .accounts({
+        tellaSigner: program.provider.publicKey,
+        fromUserAccount: user1Pda,
+        fromTokenAccount: user1TokenAccount,
+        toUserAccount: user2Pda,
+        toTokenAccount: user2TokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc({ commitment: "confirmed" });
+
+    const user1After =
+      await program.provider.connection.getTokenAccountBalance(
+        user1TokenAccount,
+      );
+    const user2After =
+      await program.provider.connection.getTokenAccountBalance(
+        user2TokenAccount,
+      );
+
+    expect(
+      new BN(user1Before.value.amount).sub(new BN(user1After.value.amount)),
+    ).to.deep.equal(new BN(1));
+    expect(
+      new BN(user2After.value.amount).sub(new BN(user2Before.value.amount)),
+    ).to.deep.equal(new BN(1));
+  });
+
+  // Verifies uninitialized sender fails
+  it("Fails transfer from uninitialized user", async () => {
+    const uninitId = "+uninitsender" + Date.now();
+    const uninitHashBytes = crypto
+      .createHash("sha256")
+      .update(uninitId)
+      .digest();
+
+    const [uninitPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), uninitHashBytes],
+      program.programId,
+    );
+
+    const uninitTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      uninitPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    try {
+      await program.methods
+        .p2PTransfer(
+          Array.from(uninitHashBytes),
+          Array.from(user2HashBytes),
+          new BN(100000),
+        )
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          fromUserAccount: uninitPda,
+          fromTokenAccount: uninitTokenAccount,
+          toUserAccount: user2Pda,
+          toTokenAccount: user2TokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.toString()).to.include("AccountNotInitialized");
+    }
+  });
+
+  // Verifies uninitialized recipient fails
+  it("Fails transfer to uninitialized user", async () => {
+    const uninitId = "+uninitrecipient" + Date.now();
+    const uninitHashBytes = crypto
+      .createHash("sha256")
+      .update(uninitId)
+      .digest();
+
+    const [uninitPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), uninitHashBytes],
+      program.programId,
+    );
+
+    const uninitTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      uninitPda,
+      true,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
+    try {
+      await program.methods
+        .p2PTransfer(
+          Array.from(user1HashBytes),
+          Array.from(uninitHashBytes),
+          new BN(100000),
+        )
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          fromUserAccount: user1Pda,
+          fromTokenAccount: user1TokenAccount,
+          toUserAccount: uninitPda,
+          toTokenAccount: uninitTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      expect.fail("Should have failed");
+    } catch (err) {
+      expect(err.toString()).to.include("AccountNotInitialized");
+    }
+  });
+
+  // Tests multiple sequential transfers
+  it("Handles multiple sequential transfers", async () => {
+    const initialBalance =
+      await program.provider.connection.getTokenAccountBalance(
+        user1TokenAccount,
+      );
+
+    for (let i = 0; i < 3; i++) {
+      await program.methods
+        .p2PTransfer(
+          Array.from(user1HashBytes),
+          Array.from(user2HashBytes),
+          new BN(100000),
+        )
+        .accounts({
+          tellaSigner: program.provider.publicKey,
+          fromUserAccount: user1Pda,
+          fromTokenAccount: user1TokenAccount,
+          toUserAccount: user2Pda,
+          toTokenAccount: user2TokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc({ commitment: "confirmed" });
+    }
+
+    const finalBalance =
+      await program.provider.connection.getTokenAccountBalance(
+        user1TokenAccount,
+      );
+
+    expect(
+      new BN(initialBalance.value.amount).sub(
+        new BN(finalBalance.value.amount),
+      ),
+    ).to.deep.equal(new BN(300000));
+  });
 });
