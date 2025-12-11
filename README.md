@@ -3,7 +3,7 @@
 [![GitHub license](https://img.shields.io/github/license/jungledesh/intent_gateway)](https://github.com/jungledesh/intent_gateway/blob/main/LICENSE)
 [![Solana](https://img.shields.io/badge/Solana-blueviolet)](https://solana.com/)
 [![Rust](https://img.shields.io/badge/Rust-1.89-orange)](https://www.rust-lang.org/)
-[![Anchor](https://img.shields.io/badge/Anchor-0.31-blue)](https://www.anchor-lang.com/)
+[![Anchor](https://img.shields.io/badge/Anchor-0.32-blue)](https://www.anchor-lang.com/)
 
 Intent Gateway is a Solana program built with Anchor that serves as the on-chain component for intent-driven transactions.
 
@@ -169,13 +169,13 @@ p2p_transfer(ctx, from_user_id_hash, to_user_id_hash, amount)
 
 + ATAs validated against PDA authority and USDC mint
 
-+ ATA auto-create for missing accounts
++ ATAs auto-created for missing accounts
 
-+ Reject self-transfer
++ Reject self-transfers
 
-+ Reject transfer amount less than 0
++ Reject transfer amounts less than or equal to 0
 
-+ CPI executed transfer
++ CPI executes transfer
 
 ## Installation
 
@@ -200,7 +200,7 @@ avm install latest
 avm use latest
 ```
 
-### Verfiy Setup
+### Verify Setup
 
 ```
 solana --version
@@ -215,22 +215,22 @@ git clone https://github.com/jungledesh/intent-gateway.git
 cd intent-gateway
 ```
 
-### Install dependencies:
+### Install Dependencies
 
 ```
 cargo build
 anchor build
 ```
 
-## Deployment 
+## Deployment
 
-### Generate program keypair (first time only)
+### Generate Program Keypair (first time only)
 
 ```
 solana-keygen new -o keys/intent_gateway-keypair.json
 ```
 
-### Build and Deploy script 
+### Build and Deploy Script
 
 ```
 #!/bin/bash
@@ -263,9 +263,9 @@ echo "🧪 Running tests ..."
 RUSTFLAGS="-C link-arg=-v" anchor test --provider.cluster $1
 ```
 
-### Run Deployment 
+### Run Deployment
 
-Supported cluster values
+Supported cluster values:
 
 | Cluster  | Arg                 |
 | -------- | ------------------- |
@@ -274,7 +274,7 @@ Supported cluster values
 | Testnet  | `testnet`           |
 | Mainnet  | `mainnet`           |
 
-Example: 
+Example:
 ```
 chmod +x scripts/deploy.sh
 ./deploy.sh devnet
@@ -303,7 +303,7 @@ spl-token transfer Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr 5 \
   --fund-recipient \
   --url https://api.devnet.solana.com
 ```
-This transfers local wallet's ATA USDC to recipient's ATA
+This transfers USDC from the local wallet's ATA to the recipient's ATA.
 
 4. View deployed program ID
 
@@ -317,21 +317,21 @@ solana address -k keys/intent_gateway-keypair.json
 cat target/idl/intent_gateway.json | jq
 ```
 
-## Fund local wallet with USDC (Devnet)
+## Fund Local Wallet with USDC (Devnet)
 
 + Open [Devnet Faucet](https://spl-token-faucet.com/?token-name=USDC-Dev)
-+ Connect Wallet
-+ Ensure devnet selected (both wallet + faucet UI)
++ Connect wallet
++ Ensure devnet is selected (both wallet + faucet UI)
 + Paste your wallet public key
-+ Faucet will airdrop directly into your USDC ATA (creates if it does not exist)
++ Faucet will airdrop directly into your USDC ATA (creates it if it does not exist)
 
 ## Testing
 
-+ Unit tests in `tests/intent-gateway.ts` cover initialization, trasnfers, and error cases. 
++ Unit tests in `tests/intent-gateway.ts` cover initialization, transfers, and error cases. 
 
 + Run with `anchor test --provider.cluster devnet` for devnet testing
 
-+ Coverage: Aim for 90%+; use cargo tarpaulin for reports.
++ Coverage: Aim for 90%+; use `cargo tarpaulin` for reports.
 
 ## Related Projects
 
@@ -343,4 +343,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Note
 
-For questions, open an issue. Built for a future where intents drive on-chain actions seamlessly!
+For questions, open an issue. Built for a future where intents drive on-chain actions seamlessly.
